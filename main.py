@@ -1,28 +1,43 @@
 import discord
 from discord.ext import commands
+from discord import app_commands
 import os
 
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="?", intents=intents, help_command=None)
+
 OWNER_ROLE = "OWNER"
 CO_OWNER_ROLE = "Co-Owner"
 HIGH_COMMAND_ROLE = "High Command"
 CONTENT_MANAGER_ROLE = "Content Manager"
 STAFF_ROLE = "STAFF"
 
-def has_role_or_owner(role_name):
-    async def predicate(ctx):
-        if discord.utils.get(ctx.author.roles, name=OWNER_ROLE):
-            return True
-        if discord.utils.get(ctx.author.roles, name=role_name):
-            return True
-        return False
-    return commands.check(predicate)
+def has_perms(interaction: discord.Interaction, role_name: str):
+    # صاحب السيرفر دايما معاه صلاحية
+    if interaction.user.id == interaction.guild.owner_id:
+        return True
+    # OWNER role
+    if discord.utils.get(interaction.user.roles, name=OWNER_ROLE):
+        return True
+    if discord.utils.get(interaction.user.roles, name=role_name):
+        return True
+    return False
 
-@bot.command(name="lock")
-@has_role_or_owner(CO_OWNER_ROLE)
-async def lock_cmd(ctx, role: discord.Role, channel: discord.TextChannel = None):
-    channel = channel or ctx.channel
+@bot.event
+async def on_ready():
+    try:
+        synced = await bot.tree.sync()
+        print(f"Synced {len(synced)} commands - Logged in as {bot.user}")
+    except Exception as e:
+        print(e)
+
+# --- LOCK / UNLOCK SLASH ---
+@bot.tree.command(name="lock", description="اقفل الكتابة عن رتبة معينة")
+@app_commands.describe(role="اختار الرتبة اللي هتقفل عنها", channel="القناة (اختياري)")
+async def lock_slash(interaction: discord.Interaction, role: discord.Role, channel: discord.TextChannel = None):
+    if not has_perms(interaction, CO_OWNER_ROLE):
+        return await interaction.response.send_message("❌ لازم رتبة Co-Owner او OWNER", ephemeral=True)
+    channel = channel or interaction.channel
     overwrite = channel.overwrites_for(role)
     overwrite.send_messages = False
     overwrite.send_messages_in_threads = False
@@ -30,14 +45,15 @@ async def lock_cmd(ctx, role: discord.Role, channel: discord.TextChannel = None)
     overwrite.embed_links = False
     overwrite.attach_files = False
     overwrite.add_reactions = False
-    overwrite.use_external_emojis = False
     await channel.set_permissions(role, overwrite=overwrite)
-    await ctx.send(f"Locked {role.name} in {channel.mention} as screenshot")
+    await interaction.response.send_message(f"🔒 قفلت {role.mention} في {channel.mention}")
 
-@bot.command(name="unlock")
-@has_role_or_owner(CO_OWNER_ROLE)
-async def unlock_cmd(ctx, role: discord.Role, channel: discord.TextChannel = None):
-    channel = channel or ctx.channel
+@bot.tree.command(name="unlock", description="افتح الكتابة عن رتبة معينة")
+@app_commands.describe(role="اختار الرتبة", channel="القناة (اختياري)")
+async def unlock_slash(interaction: discord.Interaction, role: discord.Role, channel: discord.TextChannel = None):
+    if not has_perms(interaction, CO_OWNER_ROLE):
+        return await interaction.response.send_message("❌ لازم رتبة Co-Owner او OWNER", ephemeral=True)
+    channel = channel or interaction.channel
     overwrite = channel.overwrites_for(role)
     overwrite.send_messages = True
     overwrite.send_messages_in_threads = True
@@ -45,34 +61,37 @@ async def unlock_cmd(ctx, role: discord.Role, channel: discord.TextChannel = Non
     overwrite.embed_links = True
     overwrite.attach_files = True
     overwrite.add_reactions = True
-    overwrite.use_external_emojis = True
     await channel.set_permissions(role, overwrite=overwrite)
-    await ctx.send(f"Unlocked {role.name} in {channel.mention}")
+    await interaction.response.send_message(f"🔓 فتحت {role.mention} في {channel.mention}")
 
-co_owner_cmds = ["ban","unban","kick","timeout","untimeout","slowmode","clear100","warn","addrole","removerole","nick","announce","g_announce","dm","botrestart","setprefix","antiraid_on","antiraid_off","whitelist","blacklist","serverinfo","userinfo","roleinfo","channelinfo","createchannel","deletechannel","createrole","deleterole","moveall","muteall","unmuteall","deafenall","undeafenall","giveaway","g_end","g_reroll","ticket_closeall","backup","setlogs","setwelcome","setrules","setautorole","audit","lockall","unlockall","purge","nuke","sayall"]
-high_cmds = ["clear10","clear25","clear50","kickvc","move","mute","unmute","deafen","undeafen","lockchat","unlockchat","hide","unhide","slow5","slow10","slowoff","pin","unpin","poll","say","embed","ticket_add","ticket_remove","ticket_close","voicelock","voiceunlock","voicelimit","baninfo","invites","avatar","banner","role_members","purge_bot","purge_links","purge_images","purge_user","tempban","softban","temp_mute_1h","temp_mute_24h","reason","history","report","vcmove","warn1","warn2","warn3","invites_check","userinfo_hc"]
-content_cmds = ["news","video","pic","reel","short","post","editnews","deletenews","publish","unpublish","setthumb","settitle","setdesc","settags","schedule_post","live","golive","stoplive","clip","highlight","trending","qotd","event_create","event_start","event_end","giveaway_content","poll_content","meme","funfact","update_log","patchnote","leak","spoiler","announce_content","youtube","tiktok","insta","twitch","embed_news","embed_video","content_stats","top_post","set_content_channel","set_news_channel","set_video_channel","content_help","content_rules","content_ban","content_unban"]
-staff_cmds = ["welcome","rules","help","ticket","support","info","faq","links","invite","server","membercount","ping","uptime","afk","unafk","remind","calc","avatar_s","banner_s","userinfo_s","roleinfo_s","poll_s","say_s","embed_s","8ball","meme_s","joke","quote","fact","weather","translate","search","youtube_s","play","stop","skip","queue","pause","resume","volume","lyrics","report_s","suggest","feedback","close","open","slowmode_s","clear5","warn_s","ticket_s"]
-owner_only_cmds = ["eval","exec","shutdown","restart","reload","setowner","setcoowner","sethc","setcontent","setstaff","owner1","owner2","owner3","owner4","owner5","owner6","owner7","owner8","owner9","owner10","owner11","owner12","owner13","owner14","owner15","owner16","owner17","owner18","owner19","owner20","owner21","owner22","owner23","owner24","owner25","owner26","owner27","owner28","owner29","owner30","owner31","owner32","owner33","owner34","owner35","owner36","owner37","owner38","owner39","owner40","owner41","owner42","owner43","owner44","owner45"]
+co_owner_cmds = ["ban","unban","kick","timeout","untimeout","slowmode","clear100","warn","addrole","removerole","nick","clear10","clear50","kickvc","move","mute","unmute","deafen","undeafen","lockchat","unlockchat"]
+high_cmds = ["nems","video","pic","reel","short","post","editnews","deletenews","publish","unpublish","setthumb"]
+staff_cmds = ["welcome","rules","helpme","ticket","support","info","faq","links","invite","server","membercount","ping"]
+owner_only_cmds = ["eval","exec","shutdown","restart","reload","setowner","setcoowner","sethc","setcontent","setstaff"]
+
+def make_slash(name, role_needed):
+    async def callback(interaction: discord.Interaction):
+        if not has_perms(interaction, role_needed):
+            return await interaction.response.send_message(f"❌ محتاج رتبة {role_needed}", ephemeral=True)
+        await interaction.response.send_message(f"✅ Executed: /{name}")
+    return app_commands.Command(name=name, description=f"امر {name}", callback=callback)
 
 for cmd in co_owner_cmds:
-    @bot.command(name=cmd)
-    @has_role_or_owner(CO_OWNER_ROLE)
-    async def co_c(ctx, cmd=cmd): await ctx.send(f"Executed: {cmd}")
+    bot.tree.add_command(make_slash(cmd, CO_OWNER_ROLE))
 for cmd in high_cmds:
-    @bot.command(name=cmd)
-    @has_role_or_owner(HIGH_COMMAND_ROLE)
-    async def hc_c(ctx, cmd=cmd): await ctx.send(f"Executed: {cmd}")
-for cmd in content_cmds:
-    @bot.command(name=cmd)
-    @has_role_or_owner(CONTENT_MANAGER_ROLE)
-    async def cm_c(ctx, cmd=cmd): await ctx.send(f"Executed: {cmd}")
+    bot.tree.add_command(make_slash(cmd, HIGH_COMMAND_ROLE))
 for cmd in staff_cmds:
-    @bot.command(name=cmd)
-    @has_role_or_owner(STAFF_ROLE)
-    async def staff_c(ctx, cmd=cmd): await ctx.send(f"Executed: {cmd}")
+    bot.tree.add_command(make_slash(cmd, STAFF_ROLE))
 for cmd in owner_only_cmds:
-    @bot.command(name=cmd)
-    @has_role_or_owner(OWNER_ROLE)
-    async def owner_c(ctx, cmd=cmd): await ctx.send(f"OWNER ONLY Executed: {cmd}")
+    bot.tree.add_command(make_slash(cmd, OWNER_ROLE))
+
+@bot.tree.command(name="help", description="شوف كل اوامر البوت")
+async def help_slash(interaction: discord.Interaction):
+    embed = discord.Embed(title="📜 NOVA - كل الأوامر /", color=0x2b2d31)
+    embed.add_field(name="🔒 قفل / فتح", value="`/lock @Role`\n`/unlock @Role`", inline=False)
+    embed.add_field(name="👑 Co-Owner", value="`" + "`, `".join(co_owner_cmds) + "`", inline=False)
+    embed.add_field(name="⚡ High Command", value="`" + "`, `".join(high_cmds) + "`", inline=False)
+    embed.add_field(name="🛠️ STAFF", value="`" + "`, `".join(staff_cmds) + "`", inline=False)
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
 bot.run(os.getenv("TOKEN"))
