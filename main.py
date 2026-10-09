@@ -4,10 +4,6 @@ import os
 
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="?", intents=intents, help_command=None)
-
-intents = discord.Intents.all()
-bot = commands.Bot(command_prefix="?", intents=intents)
-
 OWNER_ROLE = "OWNER"
 CO_OWNER_ROLE = "Co-Owner"
 HIGH_COMMAND_ROLE = "High Command"
