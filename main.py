@@ -75,3 +75,4 @@ for cmd in owner_only_cmds:
     @bot.command(name=cmd)
     @has_role_or_owner(OWNER_ROLE)
     async def owner_c(ctx, cmd=cmd): await ctx.send(f"OWNER ONLY Executed: {cmd}")
+bot.run(os.getenv("TOKEN"))
