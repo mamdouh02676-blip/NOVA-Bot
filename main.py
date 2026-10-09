@@ -1,5 +1,9 @@
 import discord
 from discord.ext import commands
+import os
+
+intents = discord.Intents.all()
+bot = commands.Bot(command_prefix="?", intents=intents, help_command=None)
 
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="?", intents=intents)
